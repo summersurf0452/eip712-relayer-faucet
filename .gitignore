@@ -1,0 +1,32 @@
+# Environment — never commit
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# pnpm (lock file IS committed)
+
+# AI tooling state
+.bkit/
+.omc/
+.claude/
+.codex
+
+# Build artifacts
+*.tsbuildinfo
+
+# Personal logs
+docs/conversations/
+
+# OS
+.DS_Store
+Thumbs.db

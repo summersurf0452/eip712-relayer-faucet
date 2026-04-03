@@ -1,0 +1,152 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+//  Enums
+// ─────────────────────────────────────────────
+
+enum ChallengeStatus {
+  issued
+  consumed
+  expired
+  cancelled
+}
+
+enum ClaimStatus {
+  queued
+  broadcasting
+  broadcasted
+  confirmed
+  failed_retryable
+  failed_permanent
+}
+
+enum TxAttemptStatus {
+  created
+  simulated
+  sent
+  confirmed
+  reverted
+  dropped
+  replaced
+  failed
+}
+
+// ─────────────────────────────────────────────
+//  claim_challenges
+//  API가 발급한 one-time challenge
+// ─────────────────────────────────────────────
+
+model ClaimChallenge {
+  id          String          @id @default(uuid())
+  challengeId String          @unique  // 외부 노출용 bytes32 hex
+  recipient   String          // 서명 대상 지갑 주소
+  status      ChallengeStatus @default(issued)
+
+  // EIP-712 domain snapshot (감사용)
+  chainId            Int
+  verifyingContract  String
+
+  // 시간
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // anti-abuse (raw IP 대신 HMAC hash)
+  ipHash  String?
+  uaHash  String?
+
+  // 관계
+  claim   Claim?
+
+  @@index([recipient, status])
+  @@map("claim_challenges")
+}
+
+// ─────────────────────────────────────────────
+//  claims
+//  사용자가 서명을 제출해서 만들어진 claim
+//  Worker가 처리하면서 상태를 업데이트
+// ─────────────────────────────────────────────
+
+model Claim {
+  id          String      @id @default(uuid())
+  requestId   String      @unique  // on-chain requestId (bytes32 hex)
+  recipient   String
+  signer      String      // ecrecover된 주소
+  signature   String      // raw signature
+
+  status      ClaimStatus @default(queued)
+  failureCode    String?
+  failureMessage String?
+
+  // 마지막으로 알려진 tx hash
+  txHash      String?
+
+  // 재시도 횟수
+  queueAttempts Int @default(0)
+
+  // Worker lease (중복 처리 방지)
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+
+  // 상태 전이 타임스탬프
+  queuedAt       DateTime?
+  broadcastingAt DateTime?
+  broadcastedAt  DateTime?
+  confirmedAt    DateTime?
+  finalizedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 관계
+  challengeId String         @unique
+  challenge   ClaimChallenge @relation(fields: [challengeId], references: [id])
+  txAttempts  TxAttempt[]
+
+  @@index([status, createdAt])
+  @@index([recipient])
+  @@map("claims")
+}
+
+// ─────────────────────────────────────────────
+//  tx_attempts
+//  claim 1건에 대한 트랜잭션 시도 이력
+//  한 claim이 여러 번 시도될 수 있음
+// ─────────────────────────────────────────────
+
+model TxAttempt {
+  id             String         @id @default(uuid())
+  attemptNo      Int            // 1부터 증가
+  relayerAddress String
+
+  txHash         String?
+  chainNonce     BigInt?
+  gasEstimate    BigInt?
+  maxFeePerGas   BigInt?
+  maxPriorityFeePerGas BigInt?
+
+  status         TxAttemptStatus @default(created)
+  errorCode      String?
+  errorMessage   String?
+  rpcLabel       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 관계
+  claimId String
+  claim   Claim  @relation(fields: [claimId], references: [id])
+
+  @@index([claimId])
+  @@map("tx_attempts")
+}

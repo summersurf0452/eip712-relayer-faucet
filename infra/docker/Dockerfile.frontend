@@ -1,0 +1,48 @@
+FROM node:20-alpine AS base
+RUN corepack enable pnpm
+
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/frontend/package.json ./apps/frontend/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS builder
+WORKDIR /app
+ARG NEXT_PUBLIC_CHAIN_ID
+ARG NEXT_PUBLIC_FAUCET_ADDRESS
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_RPC_EXPLORER_BASE_URL
+ARG NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+ARG NEXT_PUBLIC_RPC_URL
+ARG NEXT_PUBLIC_TOKEN_SYMBOL
+ARG NEXT_PUBLIC_IS_TESTNET
+ENV NEXT_PUBLIC_CHAIN_ID=${NEXT_PUBLIC_CHAIN_ID}
+ENV NEXT_PUBLIC_FAUCET_ADDRESS=${NEXT_PUBLIC_FAUCET_ADDRESS}
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NEXT_PUBLIC_RPC_EXPLORER_BASE_URL=${NEXT_PUBLIC_RPC_EXPLORER_BASE_URL}
+ENV NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+ENV NEXT_PUBLIC_RPC_URL=${NEXT_PUBLIC_RPC_URL}
+ENV NEXT_PUBLIC_TOKEN_SYMBOL=${NEXT_PUBLIC_TOKEN_SYMBOL}
+ENV NEXT_PUBLIC_IS_TESTNET=${NEXT_PUBLIC_IS_TESTNET}
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/apps/frontend/node_modules ./apps/frontend/node_modules
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/shared ./packages/shared
+COPY apps/frontend ./apps/frontend
+ENV NODE_OPTIONS="--max_old_space_size=1024"
+RUN pnpm --filter @eip712-faucet/shared build && pnpm --filter @eip712-faucet/frontend build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup -S app && adduser -S app -G app
+COPY --from=builder --chown=app:app /app/apps/frontend/.next/standalone ./
+COPY --from=builder --chown=app:app /app/apps/frontend/.next/static ./apps/frontend/.next/static
+COPY --from=builder --chown=app:app /app/apps/frontend/public ./apps/frontend/public
+USER app
+
+EXPOSE 3000
+CMD ["node", "apps/frontend/server.js"]
