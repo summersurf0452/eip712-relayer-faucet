@@ -5,6 +5,7 @@ import { TransactionNotFoundError, TransactionReceiptNotFoundError } from "viem"
 import { prisma } from "./db.js";
 import { publicClient } from "./chain.js";
 import { env } from "./env.js";
+import { sanitizeRelayErrorMessage } from "./dispatcher.js";
 
 const MAX_TOTAL_ATTEMPTS = 3;
 const REQUIRED_CONFIRMATIONS = BigInt(Math.max(env.CONFIRMATIONS_REQUIRED, 1));
@@ -73,7 +74,7 @@ async function reconcileTransactionAttempts(): Promise<void> {
             await maybeMarkAttemptDropped(attempt.claim, attempt.id, attempt.txHash);
           }
         } catch (lookupError) {
-          console.warn({ event: "tx_lookup_failed", claimId: attempt.claim.id, error: String(lookupError) });
+          console.warn({ event: "tx_lookup_failed", claimId: attempt.claim.id, error: sanitizeRelayErrorMessage(String(lookupError)) });
         }
         continue;
       }
@@ -84,7 +85,7 @@ async function reconcileTransactionAttempts(): Promise<void> {
       }
 
       // RPC 오류 — 다음 주기에 재시도
-      console.warn({ event: "receipt_fetch_failed", claimId: attempt.claim.id, error: String(err) });
+      console.warn({ event: "receipt_fetch_failed", claimId: attempt.claim.id, error: sanitizeRelayErrorMessage(String(err)) });
     }
   }
 }

@@ -146,7 +146,8 @@ export async function dispatch(): Promise<void> {
       }),
     ]);
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const rawError = err instanceof Error ? err.message : String(err);
+    const errorMessage = sanitizeRelayErrorMessage(rawError);
 
     // ── broadcast 성공 후 DB write 실패 — txHash 복구 시도 ──────────
     // tx는 이미 mempool에 있으므로 반드시 추적 가능하게 해야 한다
@@ -177,14 +178,14 @@ export async function dispatch(): Promise<void> {
           claimId,
           txHash,
           requestId: claim.requestId,
-          error: String(retryErr),
+          error: sanitizeRelayErrorMessage(String(retryErr)),
         });
       }
       return;
     }
 
     // ── broadcast 전 실패 — 기존 로직 ─────────────────────────────────
-    const isDeterministic = isDeterministicRevert(errorMessage);
+    const isDeterministic = isDeterministicRevert(rawError);
 
     console.error({ event: "dispatch_error", claimId, error: errorMessage, isDeterministic });
 
@@ -225,4 +226,16 @@ function isDeterministicRevert(message: string): boolean {
     "ZeroAddress",
   ];
   return deterministicErrors.some((e) => message.includes(e));
+}
+
+// RPC 에러에서 민감 정보(URL, API key, bearer token) 제거
+const MAX_ERROR_LENGTH = 500;
+export function sanitizeRelayErrorMessage(msg: string): string {
+  return msg
+    .replace(/https?:\/\/[^\s"')]+/g, "[redacted-url]")
+    .replace(/wss?:\/\/[^\s"')]+/g, "[redacted-url]")
+    .replace(/[Bb]earer\s+[A-Za-z0-9\-._~+/]+=*/g, "[redacted-token]")
+    .replace(/(?:api[_-]?[Kk]ey|token|secret|projectId)\s*[=:]\s*["']?[A-Za-z0-9\-._~+/]+["']?/g, "[redacted-key]")
+    .replace(/["'](?:api[_-]?[Kk]ey|token|secret|projectId|apikey)["']\s*:\s*["'][^"']*["']/g, "[redacted-key]")
+    .slice(0, MAX_ERROR_LENGTH);
 }

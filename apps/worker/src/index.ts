@@ -3,7 +3,7 @@
 
 import { prisma } from "./db.js";
 import { env } from "./env.js";
-import { dispatch } from "./dispatcher.js";
+import { dispatch, sanitizeRelayErrorMessage } from "./dispatcher.js";
 import { reconcile } from "./reconciler.js";
 
 console.log({ event: "worker_starting", workerId: env.WORKER_ID });
@@ -37,7 +37,7 @@ async function loop(): Promise<void> {
       // 2. broadcasted receipt 확인 + 만료 lease 복구 + retryable 재큐
       await reconcile();
     } catch (err) {
-      console.error({ event: "loop_error", error: String(err) });
+      console.error({ event: "loop_error", error: sanitizeRelayErrorMessage(String(err)) });
     }
 
     await sleep(env.POLL_INTERVAL_MS);
@@ -46,12 +46,12 @@ async function loop(): Promise<void> {
 
 // ── 종료 처리 ─────────────────────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
-  console.error({ event: "unhandled_rejection", error: String(reason) });
+  console.error({ event: "unhandled_rejection", error: sanitizeRelayErrorMessage(String(reason)) });
   process.exit(1);
 });
 
 process.on("uncaughtException", (err) => {
-  console.error({ event: "uncaught_exception", error: err.message });
+  console.error({ event: "uncaught_exception", error: sanitizeRelayErrorMessage(err.message) });
   process.exit(1);
 });
 

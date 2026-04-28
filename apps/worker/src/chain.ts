@@ -27,6 +27,8 @@ export const FAUCET_ABI = [
 ] as const;
 
 export const account = privateKeyToAccount(env.RELAYER_PRIVATE_KEY);
+delete process.env.RELAYER_PRIVATE_KEY;
+(env as Record<string, unknown>).RELAYER_PRIVATE_KEY = undefined;
 
 const knownChains: readonly Chain[] = [mainnet, sepolia, holesky, hardhat, localhost];
 
