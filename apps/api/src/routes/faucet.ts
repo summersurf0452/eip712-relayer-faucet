@@ -3,29 +3,9 @@
 
 import { FastifyInstance } from "fastify";
 import { createPublicClient, http, isAddress, getAddress } from "viem";
-import { ErrorCode, type ReasonCode } from "@eip712-faucet/shared";
+import { ERC20_ABI, ErrorCode, FAUCET_ABI, type ReasonCode } from "@eip712-faucet/shared";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
-
-// Faucet 컨트랙트에서 필요한 함수만 ABI 정의
-const FAUCET_ABI = [
-  { name: "dripAmount", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "epochBudget", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "epochSpent", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
-  { name: "nextClaimAt", type: "function", stateMutability: "view", inputs: [{ name: "recipient", type: "address" }], outputs: [{ type: "uint64" }] },
-  { name: "paused", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
-  { name: "token", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
-] as const;
-
-const ERC20_ABI = [
-  {
-    name: "balanceOf",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }],
-  },
-] as const;
 
 // Module-scope client — 요청마다 새로 만들지 않음
 const publicClient = createPublicClient({ transport: http(env.RPC_URL) });

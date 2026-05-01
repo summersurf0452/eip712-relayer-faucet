@@ -3,28 +3,10 @@
 import { createPublicClient, createWalletClient, defineChain, http, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { hardhat, holesky, localhost, mainnet, sepolia } from "viem/chains";
-import { getChainMetadata } from "@eip712-faucet/shared";
+import { FAUCET_ABI, getChainMetadata } from "@eip712-faucet/shared";
 import { env } from "./env.js";
 
-export const FAUCET_ABI = [
-  {
-    name: "drip",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "recipient", type: "address" },
-      { name: "requestId", type: "bytes32" },
-    ],
-    outputs: [],
-  },
-  {
-    name: "paused",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "bool" }],
-  },
-] as const;
+export { FAUCET_ABI };
 
 export const account = privateKeyToAccount(env.RELAYER_PRIVATE_KEY);
 delete process.env.RELAYER_PRIVATE_KEY;
