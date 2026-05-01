@@ -271,20 +271,24 @@ async function requeueRetryable(): Promise<void> {
     select: { id: true, queueAttempts: true },
   });
 
+  let requeuedCount = 0;
   for (const claim of retryable) {
     const delaySec = 30 * Math.pow(2, claim.queueAttempts);
     const retryAt = new Date(Date.now() + delaySec * 1000);
-    await prisma.claim.update({
-      where: { id: claim.id },
+    // 조건부 update — Promise.all 내 reconcileTransactionAttempts가
+    // 같은 claim을 confirmed로 전환했을 경우 역행하지 않도록 status를 가드한다.
+    const result = await prisma.claim.updateMany({
+      where: { id: claim.id, status: "failed_retryable" },
       data: {
         status: "queued",
         queueAttempts: { increment: 1 },
         queuedAt: retryAt,
       },
     });
+    requeuedCount += result.count;
   }
 
-  const requeued = { count: retryable.length };
+  const requeued = { count: requeuedCount };
 
   // 최대 시도 초과 → 영구 실패
   await prisma.claim.updateMany({
